@@ -5,10 +5,15 @@ import Head from "next/head";
 import Link from "next/link";
 import useSpeechRecognition from "@/hooks/useSpeechRecognition";
 import { useRouter } from "next/navigation";
-
+import { v4 as uuidv4 } from "uuid";
+import Loading from "@/components/Loading";
 export default function OrderPage() {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
   const [order, setOrder] = useState("");
+  const [uuid, setUuid] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   // Handle speech recognition end
   const handleSpeechEnd = () => {
@@ -21,7 +26,6 @@ export default function OrderPage() {
     speechText,
     startSpeechRecognition,
     stopSpeechRecognition,
-    imageRef,
   } = useSpeechRecognition(handleSpeechEnd);
 
   // Update order text when speech recognition completes
@@ -33,20 +37,62 @@ export default function OrderPage() {
     }
   }, [speechText, recording]);
 
+
+  //  const router = useRouter();
+
+   useEffect(() => {
+     // This function handles the beforeunload event (page refresh)
+     const handleBeforeUnload = (event) => {
+       // Store a flag in sessionStorage to indicate a page refresh is happening
+       sessionStorage.setItem("isRefreshing", "true");
+     };
+
+     // This function runs when the page loads
+     const handlePageLoad = () => {
+       // Check if the page is being loaded after a refresh
+       const isRefreshing = sessionStorage.getItem("isRefreshing");
+
+       if (isRefreshing === "true") {
+         // Clear the flag
+         sessionStorage.removeItem("isRefreshing");
+
+         // Redirect to the home page
+         router.push("/");
+       }
+     };
+
+     // Add event listeners
+     window.addEventListener("beforeunload", handleBeforeUnload);
+
+     // Check on page load
+     if (typeof window !== "undefined") {
+       handlePageLoad();
+     }
+
+     // Clean up event listeners when component unmounts
+     return () => {
+       window.removeEventListener("beforeunload", handleBeforeUnload);
+     };
+   }, [router]);
   // No need for camera setup with static video
 
   useEffect(() => {
-    if (router.isReady) {
-      //   fetchQuestions();
-    }
-  }, [router.isReady]); // Add fetchQuestions here
+    // if (router.isReady) {
+    setIsLoading(true);
+    const uid = uuidv4();
+    setUuid(uid);
+    fetchAudio(uid, "start");
+    setIsLoading(false);
+    // }
+  }, []); // Add fetchQuestions here
 
   useEffect(() => {
     if (speechText) {
-      if (videoRef.current) {
-        videoRef.current.play();
+      if (audioRef.current) {
+        audioRef.current.pause();
       }
-      //   verifyAnswer(speechText);
+
+      fetchAudio();
     }
   }, [speechText]);
   const handleStartRecording = async () => {
@@ -54,11 +100,91 @@ export default function OrderPage() {
     if (videoRef.current) {
       videoRef.current.pause();
     }
+    if (audioRef.current) {
+      console.log("audioref");
+
+      audioRef.current.pause();
+    }
 
     startSpeechRecognition();
   };
   const handleStopRecording = async () => {
     stopSpeechRecognition();
+  };
+
+  const handleAudioEnded = () => {
+    setIsPlaying(false);
+    if (selectedOption) return;
+    handleStartRecording();
+  };
+
+  const fetchAudio = async (uid, question) => {
+    try {
+      const response = await fetch("https://node.hivoco.com/api/order_chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          session_id: uid ? uid : uuid,
+          user_text: question ? question : speechText,
+          open_model: false,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch audio response");
+      }
+
+      // Get the response data - expecting an S3 audio URL
+      const data = await response.json();
+
+      if (data.audio) {
+        if (audioRef.current) {
+          audioRef.current.src = `data:audio/wav;base64,${data.audio}`;
+          audioRef.current.load(); // Load the new audio
+          audioRef.current.play(); // Play the audio
+          if (videoRef.current) {
+            videoRef.current.play();
+          }
+        }
+      } else {
+        console.error("No audio URL in the response");
+      }
+    } catch (error) {
+      console.error("Error fetching audio:", error);
+    }
+  };
+
+  const playQuestionAudio = () => {
+    // if (!allowAudio) return;
+
+    if (audio) {
+      audio.pause();
+    }
+    setAllowAudio(true);
+    const questionAudio = new Audio(
+      `data:audio/wav;base64,${questions[currentQuestionIndex]?.audio}`
+    );
+
+    questionAudio
+      .play()
+      .then(() => {
+        setIsPlaying(true);
+        setAudio(questionAudio);
+      })
+      .catch((error) => console.error("Audio play error:", error));
+
+    questionAudio.onended = () => {
+      setIsPlaying(false);
+      if (selectedOption) return;
+      handleStartRecording();
+    };
+  };
+
+  const audioEndFunction = () => {
+    if (recording) return;
+    handleStartRecording();
   };
 
   return (
@@ -137,8 +263,6 @@ export default function OrderPage() {
               </span>
             </div>
           </button>
-          {/* Hidden button for speech end callback */}
-          <button ref={imageRef} className="hidden" />
         </div>
       </div>
 
@@ -153,6 +277,13 @@ export default function OrderPage() {
           Place Your Order
         </button>
       </div>
+      <audio
+        ref={audioRef}
+        onEnded={audioEndFunction}
+        // controls
+        style={{ display: "block", marginTop: "20px" }}
+      />
+      <Loading isVisible={isLoading} />
     </div>
   );
 }
