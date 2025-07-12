@@ -920,7 +920,7 @@ export default function OrderPage() {
     // Now fetch the initial audio - but only once
     if (!initialFetchDone.current) {
       initialFetchDone.current = true;
-      fetchAudio(uid, "start");
+      handleAudioResponse(uid, "start");
     }
 
     setIsLoading(false);
@@ -934,7 +934,7 @@ export default function OrderPage() {
         audioRef?.current?.pause();
       }
 
-      fetchAudio(uuid, speechText); // Pass both UUID and speech text
+      handleAudioResponse(uuid, speechText); // Pass both UUID and speech text
     }
   }, [speechText, uuid]); // Add UUID dependency
 
@@ -1041,177 +1041,219 @@ export default function OrderPage() {
     }
   };
 
-  const handleStream = async (text) => {
-    if (!text) return;
-    console.log(
-      "Starting audio stream for text:",
-      text.substring(0, 20) + "..."
-    );
+  // const handleStream = async (text) => {
+  //   if (!text) return;
+  //   console.log(
+  //     "Starting audio stream for text:",
+  //     text.substring(0, 20) + "..."
+  //   );
 
-    setIsPlaying(true);
+  //   setIsPlaying(true);
 
-    const mediaSource = new MediaSource();
-    const audio = audioRef.current;
+  //   const mediaSource = new MediaSource();
+  //   const audio = audioRef.current;
 
-    // Clear any previous src
-    if (audio.src) {
-      URL.revokeObjectURL(audio.src);
-    }
+  //   // Clear any previous src
+  //   if (audio.src) {
+  //     URL.revokeObjectURL(audio.src);
+  //   }
 
-    audio.src = URL.createObjectURL(mediaSource);
-    audio.load();
+  //   audio.src = URL.createObjectURL(mediaSource);
+  //   audio.load();
 
-    return new Promise((resolve, reject) => {
-      mediaSource.addEventListener("sourceopen", async () => {
-        console.log("MediaSource opened");
-        let sourceBuffer;
+  //   return new Promise((resolve, reject) => {
+  //     mediaSource.addEventListener("sourceopen", async () => {
+  //       console.log("MediaSource opened");
+  //       let sourceBuffer;
 
-        try {
-          sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
-        } catch (error) {
-          console.error("Error adding source buffer:", error);
-          setIsPlaying(false);
-          reject(error);
-          return;
-        }
+  //       try {
+  //         sourceBuffer = mediaSource.addSourceBuffer("audio/mpeg");
+  //       } catch (error) {
+  //         console.error("Error adding source buffer:", error);
+  //         setIsPlaying(false);
+  //         reject(error);
+  //         return;
+  //       }
 
-        try {
-          console.log("Fetching audio from API...");
-          const response = await fetch("/api/text-to-speech/convert", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text, voiceId: "7QwDAfHpHjPD14XYTSiq" }),
-          });
+  //       try {
+  //         console.log("Fetching audio from API...");
+  //         const response = await fetch("/api/text-to-speech/convert", {
+  //           method: "POST",
+  //           headers: { "Content-Type": "application/json" },
+  //           body: JSON.stringify({ text, voiceId: "7QwDAfHpHjPD14XYTSiq" }),
+  //         });
 
-          console.log("API response status:", response.status);
+  //         console.log("API response status:", response.status);
 
-          if (!response.ok || !response.body) {
-            throw new Error(
-              `Failed to stream audio: ${response.status} ${response.statusText}`
-            );
-          }
+  //         if (!response.ok || !response.body) {
+  //           throw new Error(
+  //             `Failed to stream audio: ${response.status} ${response.statusText}`
+  //           );
+  //         }
 
-          const reader = response.body.getReader();
+  //         const reader = response.body.getReader();
 
-          const queue = [];
-          let isEndOfStream = false;
+  //         const queue = [];
+  //         let isEndOfStream = false;
 
-          const appendNextChunk = () => {
-            if (queue.length === 0) {
-              if (isEndOfStream && !sourceBuffer.updating) {
-                console.log("End of stream reached, closing MediaSource");
-                try {
-                  mediaSource.endOfStream();
-                } catch (err) {
-                  console.warn("Error ending stream:", err);
-                }
-              }
-              return;
-            }
+  //         const appendNextChunk = () => {
+  //           if (queue.length === 0) {
+  //             if (isEndOfStream && !sourceBuffer.updating) {
+  //               console.log("End of stream reached, closing MediaSource");
+  //               try {
+  //                 mediaSource.endOfStream();
+  //               } catch (err) {
+  //                 console.warn("Error ending stream:", err);
+  //               }
+  //             }
+  //             return;
+  //           }
 
-            if (sourceBuffer.updating) return;
+  //           if (sourceBuffer.updating) return;
 
-            const chunk = queue.shift();
-            try {
-              sourceBuffer.appendBuffer(chunk);
-            } catch (err) {
-              console.error("Error appending buffer:", err);
-              if (err.name === "QuotaExceededError") {
-                // Clear some from the buffer and try again later
-                queue.unshift(chunk);
-                sourceBuffer.remove(0, 2); // Remove first 2 seconds
-              }
-            }
-          };
+  //           const chunk = queue.shift();
+  //           try {
+  //             sourceBuffer.appendBuffer(chunk);
+  //           } catch (err) {
+  //             console.error("Error appending buffer:", err);
+  //             if (err.name === "QuotaExceededError") {
+  //               // Clear some from the buffer and try again later
+  //               queue.unshift(chunk);
+  //               sourceBuffer.remove(0, 2); // Remove first 2 seconds
+  //             }
+  //           }
+  //         };
 
-          sourceBuffer.addEventListener("updateend", appendNextChunk);
+  //         sourceBuffer.addEventListener("updateend", appendNextChunk);
 
-          const pump = async () => {
-            try {
-              const { done, value } = await reader.read();
+  //         const pump = async () => {
+  //           try {
+  //             const { done, value } = await reader.read();
 
-              if (done) {
-                console.log("Reader done, marking end of stream");
-                isEndOfStream = true;
-                appendNextChunk(); // Try to end the stream
-                return;
-              }
+  //             if (done) {
+  //               console.log("Reader done, marking end of stream");
+  //               isEndOfStream = true;
+  //               appendNextChunk(); // Try to end the stream
+  //               return;
+  //             }
 
-              queue.push(value);
-              appendNextChunk();
-              pump();
-            } catch (err) {
-              console.error("Error during read:", err);
-              isEndOfStream = true;
-              appendNextChunk();
-            }
-          };
+  //             queue.push(value);
+  //             appendNextChunk();
+  //             pump();
+  //           } catch (err) {
+  //             console.error("Error during read:", err);
+  //             isEndOfStream = true;
+  //             appendNextChunk();
+  //           }
+  //         };
 
-          // Make sure the audio element is fully ready before playing
-          audio.addEventListener(
-            "canplay",
-            () => {
-              console.log("Audio can play now, starting playback");
-              try {
-                const playPromise = audio.play();
-                if (playPromise !== undefined) {
-                  playPromise
-                    .then(() => {
-                      console.log("Audio playback started successfully");
-                      // Switch to speaking video when API gives a response
-                      switchToSpeakingVideo();
-                    })
-                    .catch((err) => {
-                      console.error("Error playing audio:", err);
-                      setIsPlaying(false);
-                    });
-                }
-              } catch (err) {
-                console.error("Error during play:", err);
-                setIsPlaying(false);
-              }
-            },
-            { once: true }
-          ); // only trigger once
+  //         // Make sure the audio element is fully ready before playing
+  //         audio.addEventListener(
+  //           "canplay",
+  //           () => {
+  //             console.log("Audio can play now, starting playback");
+  //             try {
+  //               const playPromise = audio.play();
+  //               if (playPromise !== undefined) {
+  //                 playPromise
+  //                   .then(() => {
+  //                     console.log("Audio playback started successfully");
+  //                     // Switch to speaking video when API gives a response
+  //                     switchToSpeakingVideo();
+  //                   })
+  //                   .catch((err) => {
+  //                     console.error("Error playing audio:", err);
+  //                     setIsPlaying(false);
+  //                   });
+  //               }
+  //             } catch (err) {
+  //               console.error("Error during play:", err);
+  //               setIsPlaying(false);
+  //             }
+  //           },
+  //           { once: true }
+  //         ); // only trigger once
 
-          pump();
-        } catch (err) {
-          console.error("Streaming error:", err);
-          setIsPlaying(false);
-          reject(err);
-        }
-      });
+  //         pump();
+  //       } catch (err) {
+  //         console.error("Streaming error:", err);
+  //         setIsPlaying(false);
+  //         reject(err);
+  //       }
+  //     });
 
-      // Handle any errors with the MediaSource
-      mediaSource.addEventListener("error", (err) => {
-        console.error("MediaSource error:", err);
-        setIsPlaying(false);
-        reject(err);
-      });
-    });
-  };
+  //     // Handle any errors with the MediaSource
+  //     mediaSource.addEventListener("error", (err) => {
+  //       console.error("MediaSource error:", err);
+  //       setIsPlaying(false);
+  //       reject(err);
+  //     });
+  //   });
+  // };
 
-  useEffect(() => {
-    if (!userResponse) return;
-    handleStream(userResponse);
-    return () => {};
-  }, [userResponse]);
+  // useEffect(() => {
+  //   if (!userResponse) return;
+  //   handleStream(userResponse);
+  //   return () => {};
+  // }, [userResponse]);
 
   // Modified to handle both initial fetch and subsequent fetches
-  const fetchAudio = async (sessionId, question) => {
+  // const fetchAudio = async (sessionId, question) => {
+  //   if (!sessionId) {
+  //     console.error("Cannot fetch audio without a valid session ID");
+  //     return;
+  //   }
+
+  //   try {
+  //     console.log(
+  //       `Fetching audio with session ID: ${sessionId} and question: ${
+  //         question || "start"
+  //       }`
+  //     );
+
+  //     const response = await fetch("http://localhost:8827/api/order_chat", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({
+  //         session_id: sessionId,
+  //         user_text: question,
+  //         open_model: false,
+  //       }),
+  //     });
+
+  //     if (!response.ok) {
+  //       throw new Error("Failed to fetch audio response");
+  //     }
+
+  //     // Get the response data
+  //     const data = await response.json();
+  //     setUserResponse(data.response);
+  //   } catch (error) {
+  //     console.error("Error fetching audio:", error);
+  //   }
+  // };
+
+  // CORRECTED IMPLEMENTATION - Two-step process optimized for speed
+
+  const handleAudioResponse = async (sessionId, question) => {
     if (!sessionId) {
       console.error("Cannot fetch audio without a valid session ID");
       return;
     }
 
-    try {
-      console.log(
-        `Fetching audio with session ID: ${sessionId} and question: ${
-          question || "start"
-        }`
-      );
+    console.log(
+      `Starting process for session: ${sessionId}, question: ${question}`
+    );
+    const totalStartTime = Date.now();
 
-      const response = await fetch("https://node.hivoco.com/api/order_chat", {
+    try {
+      // STEP 1: Get text response from Flask API
+      console.log("Step 1: Fetching text from Flask API...");
+      const textStartTime = Date.now();
+
+      const textResponse = await fetch("https://node.hivoco.com/api/order_chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1223,17 +1265,215 @@ export default function OrderPage() {
         }),
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch audio response");
+      if (!textResponse.ok) {
+        throw new Error(`Flask API error: ${textResponse.status}`);
       }
 
-      // Get the response data
-      const data = await response.json();
-      setUserResponse(data.response);
+      const data = await textResponse.json();
+      const responseText = data.response;
+
+      console.log(`Step 1 complete in ${Date.now() - textStartTime}ms`);
+      console.log(`Text received: ${responseText.substring(0, 50)}...`);
+
+      if (!responseText) {
+        throw new Error("No response text received");
+      }
+
+      // STEP 2: Convert text to audio (optimized for speed)
+      console.log("Step 2: Converting text to audio...");
+      const audioStartTime = Date.now();
+
+      setIsPlaying(true);
+
+      const audioResponse = await fetch("/api/text-to-speech/convert", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          text: responseText,
+          voiceId: "7QwDAfHpHjPD14XYTSiq",
+        }),
+      });
+
+      if (!audioResponse.ok) {
+        throw new Error(`TTS API error: ${audioResponse.status}`);
+      }
+
+      console.log(
+        `Step 2 TTS request sent in ${Date.now() - audioStartTime}ms`
+      );
+
+      // STEP 3: Play audio as soon as possible
+      const audioBlob = await audioResponse.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+
+      console.log(`Audio blob created in ${Date.now() - audioStartTime}ms`);
+      console.log(`Total process time: ${Date.now() - totalStartTime}ms`);
+
+      const audio = audioRef.current;
+
+      // Clean up previous audio
+      if (audio?.src) {
+        URL.revokeObjectURL(audio.src);
+      }
+
+      audio.src = audioUrl;
+      audio.load();
+
+      // Play immediately when ready
+      const playAudio = () => {
+        console.log(
+          `Audio ready to play at ${Date.now() - totalStartTime}ms total`
+        );
+        audio
+          .play()
+          .then(() => {
+            console.log("Audio playback started successfully");
+            switchToSpeakingVideo();
+          })
+          .catch((err) => {
+            console.error("Error playing audio:", err);
+            setIsPlaying(false);
+          });
+      };
+
+      // Use multiple events to ensure fastest playback
+      audio.addEventListener("loadeddata", playAudio, { once: true });
+      audio.addEventListener("canplay", playAudio, { once: true });
+
+      // Cleanup on end
+      audio.addEventListener(
+        "ended",
+        () => {
+          setIsPlaying(false);
+          URL.revokeObjectURL(audioUrl);
+          console.log(
+            `Complete audio cycle finished in ${Date.now() - totalStartTime}ms`
+          );
+        },
+        { once: true }
+      );
     } catch (error) {
-      console.error("Error fetching audio:", error);
+      console.error("Error in audio response process:", error);
+      setIsPlaying(false);
     }
   };
+
+  // ALTERNATIVE: Streaming approach (if you want real-time audio generation)
+  const handleStreamingAudio = async (sessionId, question) => {
+    if (!sessionId) return;
+
+    console.log("Starting streaming audio approach...");
+    const startTime = Date.now();
+
+    try {
+      // Step 1: Get text
+      const textResponse = await fetch("https://node.hivoco.com/api/order_chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          session_id: sessionId,
+          user_text: question,
+          open_model: false,
+        }),
+      });
+
+      const data = await textResponse.json();
+      const responseText = data.response;
+
+      console.log(`Text received in ${Date.now() - startTime}ms`);
+
+      // Step 2: Start audio streaming immediately
+      setIsPlaying(true);
+
+      const audioResponse = await fetch("/api/text-to-speech/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: responseText,
+          voiceId: "7QwDAfHpHjPD14XYTSiq",
+        }),
+      });
+
+      if (!audioResponse.ok || !audioResponse.body) {
+        throw new Error(`TTS streaming error: ${audioResponse.status}`);
+      }
+
+      // Collect chunks and play as soon as we have enough
+      const chunks = [];
+      const reader = audioResponse.body.getReader();
+      let hasStartedPlaying = false;
+
+      const processStream = async () => {
+        try {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            console.log(`Streaming complete in ${Date.now() - startTime}ms`);
+            return;
+          }
+
+          chunks.push(value);
+
+          // Start playing after collecting 3-4 chunks (faster than waiting for complete)
+          if (!hasStartedPlaying && chunks.length >= 3) {
+            hasStartedPlaying = true;
+
+            const partialBlob = new Blob(chunks, { type: "audio/mpeg" });
+            const audioUrl = URL.createObjectURL(partialBlob);
+
+            const audio = audioRef.current;
+            if (audio?.src) URL.revokeObjectURL(audio.src);
+
+            audio.src = audioUrl;
+            audio.load();
+
+            audio.addEventListener(
+              "canplay",
+              () => {
+                console.log(`Started playing at ${Date.now() - startTime}ms`);
+                audio.play().then(() => switchToSpeakingVideo());
+              },
+              { once: true }
+            );
+
+            audio.addEventListener(
+              "ended",
+              () => {
+                setIsPlaying(false);
+                URL.revokeObjectURL(audioUrl);
+              },
+              { once: true }
+            );
+          }
+
+          processStream(); // Continue processing
+        } catch (err) {
+          console.error("Stream processing error:", err);
+          setIsPlaying(false);
+        }
+      };
+
+      processStream();
+    } catch (error) {
+      console.error("Streaming audio error:", error);
+      setIsPlaying(false);
+    }
+  };
+
+  // Updated useEffect
+  useEffect(() => {
+    if (!userResponse) return;
+
+    // Option 1: Simple two-step process (recommended for reliability)
+    handleAudioResponse(uuid, userResponse);
+
+    // Option 2: Streaming approach (for lower latency)
+    // handleStreamingAudio(uuid, userResponse);
+  }, [userResponse]);
+
+  // Remove the old fetchAudio and handleStream functions completely
 
   return (
     <div className="h-svh flex flex-col relative bg-black">
