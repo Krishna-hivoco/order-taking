@@ -1237,6 +1237,129 @@ export default function OrderPage() {
 
   // CORRECTED IMPLEMENTATION - Two-step process optimized for speed
 
+  // const handleAudioResponse = async (sessionId, question) => {
+  //   if (!sessionId) {
+  //     console.error("Cannot fetch audio without a valid session ID");
+  //     return;
+  //   }
+
+  //   console.log(
+  //     `Starting process for session: ${sessionId}, question: ${question}`
+  //   );
+  //   const totalStartTime = Date.now();
+
+  //   try {
+  //     // STEP 1: Get text response from Flask API
+  //     console.log("Step 1: Fetching text from Flask API...");
+  //     const textStartTime = Date.now();
+
+  //     const textResponse = await fetch("https://node.hivoco.com/api/order_chat", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({
+  //         session_id: sessionId,
+  //         user_text: question,
+  //         open_model: false,
+  //       }),
+  //     });
+
+  //     if (!textResponse.ok) {
+  //       throw new Error(`Flask API error: ${textResponse.status}`);
+  //     }
+
+  //     const data = await textResponse.json();
+  //     const responseText = data.response;
+
+  //     console.log(`Step 1 complete in ${Date.now() - textStartTime}ms`);
+  //     console.log(`Text received: ${responseText.substring(0, 50)}...`);
+
+  //     if (!responseText) {
+  //       throw new Error("No response text received");
+  //     }
+
+  //     // STEP 2: Convert text to audio (optimized for speed)
+  //     console.log("Step 2: Converting text to audio...");
+  //     const audioStartTime = Date.now();
+
+  //     setIsPlaying(true);
+
+  //     const audioResponse = await fetch("/api/text-to-speech/convert", {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({
+  //         text: responseText,
+  //         voiceId: "7QwDAfHpHjPD14XYTSiq",
+  //       }),
+  //     });
+
+  //     if (!audioResponse.ok) {
+  //       throw new Error(`TTS API error: ${audioResponse.status}`);
+  //     }
+
+  //     console.log(
+  //       `Step 2 TTS request sent in ${Date.now() - audioStartTime}ms`
+  //     );
+
+  //     // STEP 3: Play audio as soon as possible
+  //     const audioBlob = await audioResponse.blob();
+  //     const audioUrl = URL.createObjectURL(audioBlob);
+
+  //     console.log(`Audio blob created in ${Date.now() - audioStartTime}ms`);
+  //     console.log(`Total process time: ${Date.now() - totalStartTime}ms`);
+
+  //     const audio = audioRef.current;
+
+  //     // Clean up previous audio
+  //     if (audio?.src) {
+  //       URL.revokeObjectURL(audio.src);
+  //     }
+
+  //     audio.src = audioUrl;
+  //     audio.load();
+
+  //     // Play immediately when ready
+  //     const playAudio = () => {
+  //       console.log(
+  //         `Audio ready to play at ${Date.now() - totalStartTime}ms total`
+  //       );
+  //       audio
+  //         .play()
+  //         .then(() => {
+  //           console.log("Audio playback started successfully");
+  //           switchToSpeakingVideo();
+  //         })
+  //         .catch((err) => {
+  //           console.error("Error playing audio:", err);
+  //           setIsPlaying(false);
+  //         });
+  //     };
+
+  //     // Use multiple events to ensure fastest playback
+  //     audio.addEventListener("loadeddata", playAudio, { once: true });
+  //     audio.addEventListener("canplay", playAudio, { once: true });
+
+  //     // Cleanup on end
+  //     audio.addEventListener(
+  //       "ended",
+  //       () => {
+  //         setIsPlaying(false);
+  //         URL.revokeObjectURL(audioUrl);
+  //         console.log(
+  //           `Complete audio cycle finished in ${Date.now() - totalStartTime}ms`
+  //         );
+  //       },
+  //       { once: true }
+  //     );
+  //   } catch (error) {
+  //     console.error("Error in audio response process:", error);
+  //     setIsPlaying(false);
+  //   }
+  // };
+
   const handleAudioResponse = async (sessionId, question) => {
     if (!sessionId) {
       console.error("Cannot fetch audio without a valid session ID");
@@ -1247,23 +1370,76 @@ export default function OrderPage() {
       `Starting process for session: ${sessionId}, question: ${question}`
     );
     const totalStartTime = Date.now();
+    const audio = audioRef.current;
 
+    // Check for predefined keyword
+    if (question.toLowerCase() === "start") {
+      console.log("Received 'start' command — using predefined audio URL.");
+
+      const predefinedAudioUrl =
+        "https://videoforinteractivedemons.s3.ap-south-1.amazonaws.com/hongs_order_audio/hongs_intro.mp3"; // <-- Replace with your actual URL
+
+      // Clean up previous audio
+      if (audio?.src) {
+        URL.revokeObjectURL(audio.src);
+      }
+
+      audio.src = predefinedAudioUrl;
+      audio.load();
+
+      const playAudio = () => {
+        console.log(
+          `Playing predefined audio at ${Date.now() - totalStartTime}ms total`
+        );
+        audio
+          .play()
+          .then(() => {
+            console.log("Predefined audio playback started");
+            switchToSpeakingVideo();
+          })
+          .catch((err) => {
+            console.error("Error playing predefined audio:", err);
+            setIsPlaying(false);
+          });
+      };
+
+      audio.addEventListener("loadeddata", playAudio, { once: true });
+      audio.addEventListener("canplay", playAudio, { once: true });
+
+      audio.addEventListener(
+        "ended",
+        () => {
+          setIsPlaying(false);
+          console.log(
+            `Predefined audio finished in ${Date.now() - totalStartTime}ms`
+          );
+        },
+        { once: true }
+      );
+
+      return; // Skip the rest of the function
+    }
+
+    // Continue with API flow for other questions
     try {
       // STEP 1: Get text response from Flask API
       console.log("Step 1: Fetching text from Flask API...");
       const textStartTime = Date.now();
 
-      const textResponse = await fetch("https://node.hivoco.com/api/order_chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          session_id: sessionId,
-          user_text: question,
-          open_model: false,
-        }),
-      });
+      const textResponse = await fetch(
+        "https://node.hivoco.com/api/order_chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            session_id: sessionId,
+            user_text: question,
+            open_model: false,
+          }),
+        }
+      );
 
       if (!textResponse.ok) {
         throw new Error(`Flask API error: ${textResponse.status}`);
@@ -1311,8 +1487,6 @@ export default function OrderPage() {
       console.log(`Audio blob created in ${Date.now() - audioStartTime}ms`);
       console.log(`Total process time: ${Date.now() - totalStartTime}ms`);
 
-      const audio = audioRef.current;
-
       // Clean up previous audio
       if (audio?.src) {
         URL.revokeObjectURL(audio.src);
@@ -1321,7 +1495,6 @@ export default function OrderPage() {
       audio.src = audioUrl;
       audio.load();
 
-      // Play immediately when ready
       const playAudio = () => {
         console.log(
           `Audio ready to play at ${Date.now() - totalStartTime}ms total`
@@ -1338,11 +1511,9 @@ export default function OrderPage() {
           });
       };
 
-      // Use multiple events to ensure fastest playback
       audio.addEventListener("loadeddata", playAudio, { once: true });
       audio.addEventListener("canplay", playAudio, { once: true });
 
-      // Cleanup on end
       audio.addEventListener(
         "ended",
         () => {
@@ -1359,6 +1530,7 @@ export default function OrderPage() {
       setIsPlaying(false);
     }
   };
+
 
   // ALTERNATIVE: Streaming approach (if you want real-time audio generation)
   const handleStreamingAudio = async (sessionId, question) => {
